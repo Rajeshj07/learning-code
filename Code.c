@@ -1,57 +1,101 @@
 #include <iostream>
 #include <vector>
 #include <algorithm>
+#include <cmath>
 
 using namespace std;
+
+int BLOCK_SIZE;
+
+// Structure to store query details
+struct Query {
+    int id;
+    int l, r;
+    
+    // Sort comparator for Mo's Algorithm
+    bool operator<(const Query& other) const {
+        int b1 = l / BLOCK_SIZE;
+        int b2 = other.l / BLOCK_SIZE;
+        if (b1 != b2) {
+            return b1 < b2;
+        }
+        // Hilbert curve / zig-zag optimization to improve cache performance
+        return (b1 & 1) ? (r < other.r) : (r > other.r);
+    }
+};
+
+const int MAX_VAL = 1000005; // Maximum frequency code constraint (10^6)
+long long current_energy = 0;
+int freq[MAX_VAL];
+
+inline void add(int val) {
+    int f = freq[val];
+    current_energy += 2LL * f + 1;
+    freq[val]++;
+}
+
+inline void remove(int val) {
+    int f = freq[val];
+    current_energy -= 2LL * f - 1;
+    freq[val]--;
+}
 
 int main() {
     // Fast I/O
     ios_base::sync_with_stdio(false);
     cin.tie(NULL);
 
-    int N;
-    if (!(cin >> N)) return 0;
+    int n, q;
+    if (!(cin >> n >> q)) return 0;
 
-    int num_guardians = 2 * N;
-    vector<vector<long long>> cost(num_guardians, vector<long long>(num_guardians));
-
-    for (int i = 0; i < num_guardians; ++i) {
-        for (int j = 0; j < num_guardians; ++j) {
-            cin >> cost[i][j];
-        }
+    vector<int> a(n + 1);
+    for (int i = 1; i <= n; ++i) {
+        cin >> a[i];
     }
 
-    int total_states = 1 << num_guardians;
-    // dp[mask] stores the maximum compatibility score for the subset of paired guardians represented by 'mask'
-    vector<long long> dp(total_states, -1);
-    dp[0] = 0; // Base case: 0 guardians paired -> 0 total score
+    BLOCK_SIZE = max(1, (int)(n / sqrt(q)));
 
-    for (int mask = 0; mask < total_states; ++mask) {
-        if (dp[mask] == -1) continue; // Unreachable state
-
-        // Find the first unpaired guardian (first bit that is 0)
-        int first_unpaired = -1;
-        for (int i = 0; i < num_guardians; ++i) {
-            if (!(mask & (1 << i))) {
-                first_unpaired = i;
-                break;
-            }
-        }
-
-        // If all guardians are paired, move on
-        if (first_unpaired == -1) continue;
-
-        // Try pairing the first unpaired guardian with all other remaining unpaired guardians
-        for (int partner = first_unpaired + 1; partner < num_guardians; ++partner) {
-            if (!(mask & (1 << partner))) {
-                int next_mask = mask | (1 << first_unpaired) | (1 << partner);
-                dp[next_mask] = max(dp[next_mask], dp[mask] + cost[first_unpaired][partner]);
-            }
-        }
+    vector<Query> queries(q);
+    for (int i = 0; i < q; ++i) {
+        cin >> queries[i].l >> queries[i].r;
+        queries[i].id = i;
     }
 
-    // Output the optimal answer when all guardians are paired
-    cout << dp[total_states - 1] << "\n";
+    // Sort queries in offline Mo's order
+    sort(queries.begin(), queries.end());
+
+    vector<long long> answers(q);
+    int cur_l = 1, cur_r = 0;
+
+    for (int i = 0; i < q; ++i) {
+        int L = queries[i].l;
+        int R = queries[i].r;
+
+        // Adjust pointers to match range [L, R]
+        while (cur_r < R) {
+            cur_r++;
+            add(a[cur_r]);
+        }
+        while (cur_r > R) {
+            remove(a[cur_r]);
+            cur_r--;
+        }
+        while (cur_l < L) {
+            remove(a[cur_l]);
+            cur_l++;
+        }
+        while (cur_l > L) {
+            cur_l--;
+            add(a[cur_l]);
+        }
+
+        answers[queries[i].id] = current_energy;
+    }
+
+    // Print all results in original query order
+    for (int i = 0; i < q; ++i) {
+        cout << answers[i] << "\n";
+    }
 
     return 0;
 }
